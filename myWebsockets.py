@@ -92,8 +92,8 @@ class WebsocketsConfig:
 class _MessageData:
     def __init__(self, rawData: dict):
         self.type: str = rawData.get('type')
-        self.event: str | None = rawData.get('event')
-        self.body: object | dict | None = rawData.get('body')
+        self.event: str = rawData.get('event')
+        self.body: dict = rawData.get('body')
 
     def _checkToken(token: str = None):
         if token is None:
@@ -108,7 +108,7 @@ class _MqttMessageData:
     def __init__(self, rawData: dict):
         self.event : str = rawData.get("event")
         self.value : any = rawData.get("value")
-        self.topic : str | None = None
+        self.topic : str = None
         
     def setMqttTopic(self, topic):
         self.topic = topic
