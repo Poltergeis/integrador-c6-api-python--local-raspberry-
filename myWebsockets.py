@@ -43,18 +43,22 @@ class WebsocketsConfig:
         """Inicializa el cliente MQTT y lo configura para manejar eventos."""
         broker = os.getenv("MQTT_BROKER")  # Cambia al broker que estés usando
         port = int(os.getenv("MQTT_PORT"))
-        topic_distancia = "sensor/distancia"
-        topic_toque = "sensor/toque"
+        username = os.getenv("MQTT_USERNAME")
+        password = os.getenv("MQTT_PASSWORD")
         topic_test = "message/event"
 
         self.mqtt_client = mqtt.Client()
+        self.mqtt_client.username_pw_set(username, password)
 
         # Configura los callbacks de MQTT
         def on_connect(client, userdata, flags, rc):
-            logger.info("Conectado al broker MQTT")
-            client.subscribe(topic_distancia)
-            client.subscribe(topic_toque)
-            client.subscribe(topic_test)
+            if rc == 0:
+                logger.info("Conectado al broker MQTT")
+                client.subscribe(os.getenv("TOPIC_DISTANCIA"))
+                client.subscribe(os.getenv("TOPIC_TOQUE"))
+                client.subscribe(topic_test)
+            else:
+                logger.error(f"Error en la conexión: {rc}")
 
         async def on_message(client, userdata, msg):
             try:
@@ -69,7 +73,12 @@ class WebsocketsConfig:
             except Exception as e:
                 logger.error(f"Error en on_message: {e}")
 
+        self.mqtt_client.on_connect = on_connect
         self.mqtt_client.on_message = lambda c, u, m: asyncio.create_task(on_message(c, u, m))
+        
+        # Conectar al broker MQTT usando el puerto especificado
+        self.mqtt_client.connect(broker, port)
+        self.mqtt_client.loop_start()  # Iniciar el loop del cliente MQTT
 
     async def send_mqtt_to_ws(self, ws):
         """Envía mensajes de la cola MQTT a WebSocket."""
@@ -89,7 +98,7 @@ class _MessageData:
     def __init__(self, rawData: dict):
         self.type: str = rawData.get('type')
         self.event: str = rawData.get('event')
-        self.value : int | any = rawData.get('value')
+        self.value: int | any = rawData.get('value')
         self.body: dict = rawData.get('body')
 
     def _checkToken(token: str = None):
@@ -103,9 +112,9 @@ class _MessageData:
 
 class _MqttMessageData:
     def __init__(self, rawData: dict):
-        self.event : str = rawData.get("event")
-        self.value : any = rawData.get("value")
-        self.topic : str = None
+        self.event: str = rawData.get("event")
+        self.value: any = rawData.get("value")
+        self.topic: str = None
         
     def setMqttTopic(self, topic):
         self.topic = topic
