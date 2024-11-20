@@ -1,123 +1,126 @@
+from gmqtt import Client as MQTTClient
 from loguru import logger
-import json
 import asyncio
-from routers.middlewares import validateToken
-import paho.mqtt.client as mqtt
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
+import json
 
 class WebsocketsConfig:
-    def __init__(self, app):
+    def __init__(self, app, mqtt_config):
+        """
+        Inicializa el manejador de WebSockets y MQTT.
+        :param app: Instancia de la aplicación Sanic.
+        :param mqtt_config: Diccionario con configuración del broker MQTT.
+        """
         self.app = app
         self.queue = asyncio.Queue()  # Cola para pasar mensajes de MQTT a WebSocket
-        self.init_mqtt_client()
+        self.mqtt_config = mqtt_config
+        self.mqtt_client = None
 
-        @app.websocket("/")
-        async def websocketsHandler(request, ws):
-            token = "hola"  # request.cookies.get("authToken")
+        # Configurar WebSocket
+        self.register_websocket_route()
+        
+        # Iniciar el cliente MQTT dentro del bucle de eventos
+        app.add_task(self.init_mqtt_client())
+
+    def register_websocket_route(self):
+        """Registra la ruta de WebSocket en Sanic."""
+        @self.app.websocket("/ws")
+        async def websockets_handler(request, ws):
+            token = True  # Aquí podrías usar validateToken o cookies reales
             if not token:
                 await ws.close(code=1008, reason="Missing authentication token")
                 return
             
-            logger.info("New connection to WebSocket")
-
-            # Tarea asincrónica para enviar mensajes MQTT al cliente WebSocket
+            logger.info("Nueva conexión WebSocket")
             send_task = asyncio.create_task(self.send_mqtt_to_ws(ws))
 
             try:
                 while True:
                     data = await ws.recv()
                     if data:
-                        try:
-                            parsed_data = _MessageData.parse(data)
-                        except json.JSONDecodeError:
-                            logger.error("Failed to parse JSON data")
+                        logger.info(f"Mensaje recibido del WebSocket: {data}")
+                        await self.handle_ws_message(data)
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error(f"Error en WebSocket: {e}")
             finally:
-                send_task.cancel()  # Cancelar la tarea cuando el cliente se desconecta
+                send_task.cancel()
+                logger.info("Conexión WebSocket cerrada")
 
-    def init_mqtt_client(self):
-        """Inicializa el cliente MQTT y lo configura para manejar eventos."""
-        broker = os.getenv("MQTT_BROKER")  # Cambia al broker que estés usando
-        port = int(os.getenv("MQTT_PORT"))
-        username = os.getenv("MQTT_USERNAME")
-        password = os.getenv("MQTT_PASSWORD")
-        topic_test = "message/event"
-
-        self.mqtt_client = mqtt.Client()
-        self.mqtt_client.username_pw_set(username, password)
-
-        # Configura los callbacks de MQTT
-        def on_connect(client, userdata, flags, rc):
-            if rc == 0:
-                logger.info("Conectado al broker MQTT")
-                client.subscribe(os.getenv("TOPIC_DISTANCIA"))
-                client.subscribe(os.getenv("TOPIC_TOQUE"))
-                client.subscribe(topic_test)
-            else:
-                logger.error(f"Error en la conexión: {rc}")
-
-        async def on_message(client, userdata, msg):
-            try:
-                message = json.loads(msg.payload.decode())
-                message = _MqttMessageData(message)
-                topic = msg.topic
-                message.setMqttTopic(topic)
-                logger.info(f"Mensaje MQTT recibido: {message.value} en el topic {topic}")
-                await self.queue.put(message)  # Evita asyncio.run
-            except json.JSONDecodeError:
-                logger.error(f"Mensaje no es un JSON válido: {msg.payload.decode()}")
-            except Exception as e:
-                logger.error(f"Error en on_message: {e}")
-
-        self.mqtt_client.on_connect = on_connect
-        self.mqtt_client.on_message = lambda c, u, m: asyncio.create_task(on_message(c, u, m))
-        
-        # Conectar al broker MQTT usando el puerto especificado
-        self.mqtt_client.connect(broker, port)
-        self.mqtt_client.loop_start()  # Iniciar el loop del cliente MQTT
+    async def handle_ws_message(self, message):
+        """
+        Procesa mensajes recibidos desde WebSocket.
+        """
+        try:
+            parsed_data = _MessageData.parse(message)
+            logger.info(f"Mensaje procesado del WebSocket: {parsed_data.__dict__}")
+            # Aquí puedes agregar lógica para reenviar al broker MQTT, si es necesario.
+        except json.JSONDecodeError:
+            logger.error("Mensaje no es un JSON válido.")
 
     async def send_mqtt_to_ws(self, ws):
-        """Envía mensajes de la cola MQTT a WebSocket."""
+        """
+        Envía mensajes de MQTT a WebSocket.
+        """
         while True:
             try:
-                message: _MqttMessageData = await self.queue.get()
-                if not message.hasValues():
-                    await ws.send(json.dumps({"message": "bad reading from sensors, or data was malformed"}))
-                    continue
-                await ws.send(json.dumps({"event": message.topic, "data": message.value, "message": "message from sensors"}))
+                message = await self.queue.get()
+                await ws.send(json.dumps(message))
             except Exception as e:
                 logger.error(f"Error enviando mensaje al WebSocket: {e}")
-                break  # Sal del bucle si el cliente WebSocket se desconecta
+                break
 
+    async def init_mqtt_client(self):
+        """
+        Inicializa y configura el cliente MQTT.
+        """
+        self.mqtt_client = MQTTClient("sanic_client")
+
+        @self.mqtt_client.on_connect
+        def on_connect(client, flags, rc, properties):
+            logger.info("Conectado al broker MQTT")
+            topics = [self.mqtt_config.get("topic_distancia"), 
+                      self.mqtt_config.get("topic_toque"), 
+                      self.mqtt_config.get("topic_temperatura"),
+                      self.mqtt_config.get("topic_bpm")
+                      "message/event"]
+            for topic in topics:
+                if topic:
+                    self.mqtt_client.subscribe(topic, qos=1)
+
+        @self.mqtt_client.on_message
+        async def on_message(client, topic, payload, qos, properties):
+            logger.info(f"Mensaje recibido del MQTT: {payload.decode()} en el tópico {topic}")
+            try:
+                message = {
+                    "topic": topic,
+                    "payload": json.loads(payload.decode()),
+                }
+                await self.queue.put(message)
+            except json.JSONDecodeError:
+                logger.error("Mensaje MQTT no es un JSON válido.")
+
+        self.mqtt_client.on_disconnect = lambda client, packet, exc: logger.warning("Desconectado del broker MQTT")
+        self.mqtt_client.on_subscribe = lambda client, mid, qos: logger.info(f"Suscrito al tópico con QoS: {qos}")
+
+        broker = self.mqtt_config.get("broker", "localhost")
+        port = self.mqtt_config.get("port", 1883)
+        username = self.mqtt_config.get("username")
+        password = self.mqtt_config.get("password")
+
+        if username and password:
+            self.mqtt_client.set_auth_credentials(username, password)
+
+        await self.mqtt_client.connect(broker, port)
+
+        # Ejecutar el bucle de eventos del cliente MQTT en el bucle principal de asyncio
+        while True:
+            await asyncio.sleep(1)
 
 class _MessageData:
     def __init__(self, rawData: dict):
-        self.type: str = rawData.get('type')
-        self.event: str = rawData.get('event')
-        self.value: int | any = rawData.get('value')
-        self.body: dict = rawData.get('body')
-
-    def _checkToken(token: str = None):
-        if token is None:
-            raise ValueError("error, token doesn't exist")
+        self.event: str = rawData.get('Event')
+        self.value: int | any = rawData.get('valor')
 
     @staticmethod
     def parse(stringRawData: str):
         rawData = json.loads(stringRawData)
         return _MessageData(rawData)
-
-class _MqttMessageData:
-    def __init__(self, rawData: dict):
-        self.event: str = rawData.get("event")
-        self.value: any = rawData.get("value")
-        self.topic: str = None
-        
-    def setMqttTopic(self, topic):
-        self.topic = topic
-        
-    def hasValues(self):
-        return all([self.event, self.value, self.topic])

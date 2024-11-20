@@ -26,3 +26,7 @@ class UserModel(Model):
             gmail=data["gmail"],
             password=data["password"],
         )
+
+class TemperaturaModel(Model):
+    id = fields.IntField(pk=True)
+    

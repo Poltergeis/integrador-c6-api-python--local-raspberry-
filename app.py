@@ -27,7 +27,18 @@ connectToDatabase(app)
     
 app.blueprint(UserRouter().blueprint)
 
-WebsocketsConfig(app)
+mqtt_config = {
+    "broker": os.getenv("MQTT_BROKER", "localhost"),
+    "port": int(os.getenv("MQTT_PORT", 1883)),
+    "username": os.getenv("MQTT_USERNAME"),
+    "password": os.getenv("MQTT_PASSWORD"),
+    "topic_distancia": os.getenv("TOPIC_DISTANCIA"),
+    "topic_toque": os.getenv("TOPIC_TOQUE"),
+    "topic_temperatura": os.getenv("TOPIC_TEMPERATURA"),
+    "topic_bpm": os.getenv("TOPIC_BPM")
+}
+
+WebsocketsConfig(app, mqtt_config)
 
 if __name__ == "__main__":
     app.run(
