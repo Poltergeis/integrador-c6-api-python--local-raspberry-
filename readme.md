@@ -1,1 +1,1 @@
-pip install sanic sanic-cors paho-mqtt loguru websockets bson motor pydantic dotenv pymongo python-dotenv
+pip install sanic sanic-cors paho-mqtt loguru websockets bson motor pydantic dotenv pymongo python-dotenv bleach bcrypt tortoise-orm[aiomysql]

@@ -32,12 +32,6 @@ class WebsocketsConfig:
                     if data:
                         try:
                             parsed_data = _MessageData.parse(data)
-
-                            match parsed_data.event:
-                                case "mqtt/event":
-                                    # Aquí puedes manejar mensajes específicos enviados por el cliente
-                                    pass
-
                         except json.JSONDecodeError:
                             logger.error("Failed to parse JSON data")
             except Exception as e:
@@ -51,6 +45,7 @@ class WebsocketsConfig:
         port = int(os.getenv("MQTT_PORT"))
         topic_distancia = "sensor/distancia"
         topic_toque = "sensor/toque"
+        topic_test = "message/event"
 
         self.mqtt_client = mqtt.Client()
 
@@ -59,6 +54,7 @@ class WebsocketsConfig:
             logger.info("Conectado al broker MQTT")
             client.subscribe(topic_distancia)
             client.subscribe(topic_toque)
+            client.subscribe(topic_test)
 
         async def on_message(client, userdata, msg):
             try:
@@ -93,6 +89,7 @@ class _MessageData:
     def __init__(self, rawData: dict):
         self.type: str = rawData.get('type')
         self.event: str = rawData.get('event')
+        self.value : int | any = rawData.get('value')
         self.body: dict = rawData.get('body')
 
     def _checkToken(token: str = None):

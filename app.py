@@ -23,13 +23,9 @@ CORS(app, resources={
     }
 })
 
-db = connectToDatabase()
-
-if db is None:
-    logger.error("closing app without database connection")
-    sys.exit(1)
+connectToDatabase(app)
     
-app.blueprint(UserRouter(db).blueprint)
+app.blueprint(UserRouter().blueprint)
 
 WebsocketsConfig(app)
 

@@ -8,7 +8,7 @@ from typing import Callable
 load_dotenv()
 
 # Middleware decorator for specific routes
-def validateToken(handler: Callable) -> Callable:
+def validateToken(handler: Callable[[Request, list, dict], any]) -> Callable:
     async def middleware(request: Request, *args, **kwargs):
         token = request.cookies.get("authToken")
         if not token:
