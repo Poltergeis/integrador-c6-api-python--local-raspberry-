@@ -80,7 +80,7 @@ class WebsocketsConfig:
             topics = [self.mqtt_config.get("topic_distancia"), 
                       self.mqtt_config.get("topic_toque"), 
                       self.mqtt_config.get("topic_temperatura"),
-                      self.mqtt_config.get("topic_bpm")
+                      self.mqtt_config.get("topic_bpm"),
                       "message/event"]
             for topic in topics:
                 if topic:
