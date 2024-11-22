@@ -6,9 +6,6 @@ from sanic_cors import CORS
 from loguru import logger
 from database.ConnectToDatabase import connectToDatabase
 from routers.UserRouter import UserRouter
-import sys
-from myWebsockets import WebsocketsConfig
-from sanic.server.protocols.websocket_protocol import WebSocketProtocol
 
 load_dotenv()
 
@@ -27,23 +24,9 @@ connectToDatabase(app)
     
 app.blueprint(UserRouter().blueprint)
 
-mqtt_config = {
-    "broker": os.getenv("MQTT_BROKER", "localhost"),
-    "port": int(os.getenv("MQTT_PORT", 1883)),
-    "username": os.getenv("MQTT_USERNAME"),
-    "password": os.getenv("MQTT_PASSWORD"),
-    "topic_distancia": os.getenv("TOPIC_DISTANCIA"),
-    "topic_toque": os.getenv("TOPIC_TOQUE"),
-    "topic_temperatura": os.getenv("TOPIC_TEMPERATURA"),
-    "topic_bpm": os.getenv("TOPIC_BPM")
-}
-
-WebsocketsConfig(app, mqtt_config)
-
 if __name__ == "__main__":
     app.run(
         host=os.getenv("API_HOST"),
         port=int(os.getenv("API_PORT")),
-        protocol=WebSocketProtocol,
         dev=True,
     )
