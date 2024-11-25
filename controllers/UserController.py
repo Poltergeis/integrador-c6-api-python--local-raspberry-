@@ -50,7 +50,6 @@ class UserController:
             }, status=200)
             res.cookies["authToken"] = token
             res.cookies['authToken']['httponly'] = True
-            res.cookies['authToken']['samesite'] = 'strict'
             res.cookies['authToken']["max-age"] = 86400
             return res
         except Exception as e:
