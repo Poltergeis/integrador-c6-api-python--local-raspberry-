@@ -14,7 +14,7 @@ app = Sanic("vitalGuard-server")
 
 CORS(app, resources={
     r"/*": {
-        "origins": [os.getenv("DOMAIN_ALLOWED")],
+        "origins": ["*"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
         "allow_headers": ["Content-Type", "authorization"],
         "supports_credentials": True
