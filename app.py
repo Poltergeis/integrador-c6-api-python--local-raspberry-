@@ -6,6 +6,7 @@ from sanic_cors import CORS
 from loguru import logger
 from database.ConnectToDatabase import connectToDatabase
 from routers.UserRouter import UserRouter
+from auth import auth_bp
 
 load_dotenv()
 
@@ -23,6 +24,7 @@ CORS(app, resources={
 connectToDatabase(app)
     
 app.blueprint(UserRouter().blueprint)
+app.blueprint(auth_bp)
 
 if __name__ == "__main__":
     app.run(
